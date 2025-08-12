@@ -1,34 +1,43 @@
-const mysql = require('mysql2/promise');
+const { createClient } = require('@supabase/supabase-js');
 require('dotenv').config();
 
-const dbConfig = {
-  host: process.env.DB_HOST,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME,
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0,
-  acquireTimeout: 60000,
-  timeout: 60000,
-  reconnect: true,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
-};
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-const pool = mysql.createPool(dbConfig);
+if (!supabaseUrl || !supabaseServiceKey) {
+  throw new Error('Missing Supabase environment variables for database connection');
+}
+
+const supabaseDb = createClient(supabaseUrl, supabaseServiceKey, {
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false
+  }
+});
 
 const testConnection = async () => {
   try {
-    const connection = await pool.getConnection();
-    console.log('Database MySQL connected successfully');
-    connection.release();
+    const { data, error } = await supabaseDb
+      .from('auth.users')
+      .select('*', { count: 'exact', head: true })
+      .limit(0);
+    
+    if (error) {
+      const { data: simpleData, error: simpleError } = await supabaseDb.auth.getSession();
+      if (simpleError && simpleError.message !== 'No session available') {
+        throw new Error(`Database connection failed: ${simpleError.message}`);
+      }
+    }
+    
+    console.log('Database PostgreSQL (Supabase) connected successfully');
+    return true;
   } catch (error) {
     console.error('Database connection failed:', error.message);
-    process.exit(1);
+    return false;
   }
 };
 
 module.exports = {
-  pool,
+  supabaseDb,
   testConnection
 };

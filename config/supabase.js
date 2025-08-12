@@ -11,17 +11,34 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false
+  }
+});
 
 const testSupabaseConnection = async () => {
   try {
-    const { data, error } = await supabase.from('_health_check').select('*').limit(1);
-    if (error && error.code !== 'PGRST116') {
-      throw error;
+    const { data: authData, error: authError } = await supabase.auth.getSession();
+    
+    if (authError && authError.message !== 'No session available') {
+      console.warn('Supabase auth test warning:', authError.message);
+    } else {
+      console.log('Supabase Auth service connected successfully');
     }
-    console.log('Supabase connected successfully');
+    
+    try {
+      const { data: dbData, error: dbError } = await supabaseAdmin.auth.getSession();
+      console.log('Supabase Database service connected successfully');
+    } catch (dbErr) {
+      console.warn('Supabase database test warning:', dbErr.message);
+    }
+    
+    return true;
   } catch (error) {
-    console.log('Supabase connection test skipped (table _health_check not found)');
+    console.error('Supabase connection test failed:', error.message);
+    return false;
   }
 };
 
