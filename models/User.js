@@ -30,7 +30,6 @@ class User {
       .select(`
         id, 
         email, 
-        password, 
         full_name, 
         username,
         phone,

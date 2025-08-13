@@ -1,4 +1,3 @@
-const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const Role = require('../models/Role');
@@ -16,6 +15,24 @@ class AuthController {
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN }
     );
+  }
+
+  static validateLoginInput(data) {
+    const errors = [];
+    
+    if (!data.email) {
+      errors.push('Email is required');
+    } else if (!/\S+@\S+\.\S+/.test(data.email)) {
+      errors.push('Email is invalid');
+    }
+    
+    if (!data.password) {
+      errors.push('Password is required');
+    } else if (data.password.length < 6) {
+      errors.push('Password must be at least 6 characters');
+    }
+    
+    return errors;
   }
 
   static async register(req, res) {
@@ -40,18 +57,33 @@ class AuthController {
         });
       }
 
+      const { supabase } = require('../config/supabase');
+      
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name
+          }
+        }
+      });
+
+      if (authError) {
+        return res.status(400).json({
+          success: false,
+          message: authError.message
+        });
+      }
+
       await Role.ensureDefaultRoles();
       await Level.ensureDefaultLevels();
 
       const defaultRole = await Role.getDefault();
       const defaultLevel = await Level.getDefault();
 
-      const saltRounds = parseInt(process.env.BCRYPT_SALT_ROUNDS) || 12;
-      const hashedPassword = await bcrypt.hash(password, saltRounds);
-
       const userData = {
         email,
-        password: hashedPassword,
         full_name,
         role_id: defaultRole.id,
         level_id: defaultLevel.id
@@ -74,7 +106,8 @@ class AuthController {
             role: newUser.roles?.name,
             level: newUser.levels?.name
           },
-          token
+          token,
+          supabaseUser: authData.user
         }
       });
 
@@ -100,19 +133,25 @@ class AuthController {
         });
       }
 
-      const user = await User.findByEmail(email);
-      if (!user) {
+      const { supabase } = require('../config/supabase');
+      
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
+
+      if (authError) {
         return res.status(401).json({
           success: false,
           message: 'Email atau password salah'
         });
       }
 
-      const isPasswordValid = await bcrypt.compare(password, user.password);
-      if (!isPasswordValid) {
+      const user = await User.findByEmail(email);
+      if (!user) {
         return res.status(401).json({
           success: false,
-          message: 'Email atau password salah'
+          message: 'User tidak ditemukan'
         });
       }
 
@@ -132,7 +171,8 @@ class AuthController {
             level: user.levels?.name,
             avatar_url: user.avatar_url
           },
-          token
+          token,
+          supabaseSession: authData.session
         }
       });
 
@@ -231,13 +271,12 @@ class AuthController {
 
   static async changePassword(req, res) {
     try {
-      const userId = req.user.id;
-      const { currentPassword, newPassword } = req.body;
+      const { newPassword } = req.body;
 
-      if (!currentPassword || !newPassword) {
+      if (!newPassword) {
         return res.status(400).json({
           success: false,
-          message: 'Password lama dan password baru wajib diisi'
+          message: 'Password baru wajib diisi'
         });
       }
 
@@ -248,26 +287,18 @@ class AuthController {
         });
       }
 
-      const user = await User.findByEmail(req.user.email);
-      if (!user) {
-        return res.status(404).json({
-          success: false,
-          message: 'User tidak ditemukan'
-        });
-      }
+      const { supabase } = require('../config/supabase');
+      
+      const { data, error } = await supabase.auth.updateUser({
+        password: newPassword
+      });
 
-      const isCurrentPasswordValid = await bcrypt.compare(currentPassword, user.password);
-      if (!isCurrentPasswordValid) {
+      if (error) {
         return res.status(400).json({
           success: false,
-          message: 'Password lama salah'
+          message: error.message
         });
       }
-
-      const saltRounds = parseInt(process.env.BCRYPT_SALT_ROUNDS) || 12;
-      const hashedNewPassword = await bcrypt.hash(newPassword, saltRounds);
-
-      await User.updatePassword(userId, hashedNewPassword);
 
       res.json({
         success: true,
@@ -276,6 +307,85 @@ class AuthController {
 
     } catch (error) {
       console.error('Change password error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Internal server error'
+      });
+    }
+  }
+
+  static async confirmEmail(req, res) {
+    try {
+      const { token, email } = req.body;
+
+      if (!token || !email) {
+        return res.status(400).json({
+          success: false,
+          message: 'Token dan email diperlukan'
+        });
+      }
+
+      const { supabase } = require('../config/supabase');
+      
+      const { data, error } = await supabase.auth.verifyOtp({
+        email,
+        token,
+        type: 'email'
+      });
+
+      if (error) {
+        return res.status(400).json({
+          success: false,
+          message: error.message
+        });
+      }
+
+      res.json({
+        success: true,
+        message: 'Email berhasil dikonfirmasi'
+      });
+
+    } catch (error) {
+      console.error('Confirm email error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Internal server error'
+      });
+    }
+  }
+
+  static async resendConfirmation(req, res) {
+    try {
+      const { email } = req.body;
+
+      if (!email) {
+        return res.status(400).json({
+          success: false,
+          message: 'Email diperlukan'
+        });
+      }
+
+      const { supabase } = require('../config/supabase');
+      
+      const { data, error } = await supabase.auth.resend({
+        type: 'signup',
+        email
+      });
+
+      if (error) {
+        return res.status(400).json({
+          success: false,
+          message: error.message
+        });
+      }
+
+      res.json({
+        success: true,
+        message: 'Email konfirmasi berhasil dikirim ulang'
+      });
+
+    } catch (error) {
+      console.error('Resend confirmation error:', error);
       res.status(500).json({
         success: false,
         message: 'Internal server error'
