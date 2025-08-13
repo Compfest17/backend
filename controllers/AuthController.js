@@ -79,17 +79,16 @@ class AuthController {
       await Role.ensureDefaultRoles();
       await Level.ensureDefaultLevels();
 
-      const defaultRole = await Role.getDefault();
-      const defaultLevel = await Level.getDefault();
+      await new Promise(resolve => setTimeout(resolve, 100));
 
-      const userData = {
-        email,
-        full_name,
-        role_id: defaultRole.id,
-        level_id: defaultLevel.id
-      };
-
-      const newUser = await User.create(userData);
+      const newUser = await User.findByEmail(email);
+      
+      if (!newUser) {
+        return res.status(500).json({
+          success: false,
+          message: 'User creation failed'
+        });
+      }
 
       const token = AuthController.createToken(newUser);
 
