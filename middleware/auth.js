@@ -1,6 +1,21 @@
 const jwt = require('jsonwebtoken');
 const { supabaseAdmin } = require('../config/supabase');
 
+
+const tokenBlacklist = new Set();
+
+const addTokenToBlacklist = (token) => {
+  tokenBlacklist.add(token);
+
+  setTimeout(() => {
+    tokenBlacklist.delete(token);
+  }, 24 * 60 * 60 * 1000); 
+};
+
+const isTokenBlacklisted = (token) => {
+  return tokenBlacklist.has(token);
+};
+
 const authenticateToken = async (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
@@ -10,6 +25,13 @@ const authenticateToken = async (req, res, next) => {
       return res.status(401).json({
         success: false,
         message: 'Access token diperlukan'
+      });
+    }
+
+    if (isTokenBlacklisted(token)) {
+      return res.status(401).json({
+        success: false,
+        message: 'Token sudah tidak valid, silakan login kembali'
       });
     }
 
@@ -42,6 +64,7 @@ const authenticateToken = async (req, res, next) => {
 
       req.user = user;
       req.supabaseUser = supabaseUser;
+      req.token = token;
       return next();
     }
 
@@ -71,6 +94,7 @@ const authenticateToken = async (req, res, next) => {
     }
 
     req.user = user;
+    req.token = token;
     next();
 
   } catch (error) {
@@ -127,6 +151,11 @@ const optionalAuth = async (req, res, next) => {
       return next();
     }
 
+    if (isTokenBlacklisted(token)) {
+      req.user = null;
+      return next();
+    }
+
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     
     const { data: user, error } = await supabaseAdmin
@@ -146,11 +175,36 @@ const optionalAuth = async (req, res, next) => {
       .single();
 
     req.user = error || !user ? null : user;
+    req.token = token;
     next();
 
   } catch (error) {
     req.user = null;
     next();
+  }
+};
+
+const authenticateForLogout = async (req, res, next) => {
+  try {
+    const authHeader = req.headers.authorization;
+    const token = authHeader && authHeader.split(' ')[1]; 
+
+    if (!token) {
+      return res.status(401).json({
+        success: false,
+        message: 'Access token diperlukan untuk logout'
+      });
+    }
+    
+    req.token = token;
+    next();
+
+  } catch (error) {
+    console.error('Auth for logout error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
   }
 };
 

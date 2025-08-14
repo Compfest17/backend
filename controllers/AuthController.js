@@ -184,6 +184,33 @@ class AuthController {
     }
   }
 
+  static async logout(req, res) {
+    try {
+      const { supabase } = require('../config/supabase');
+      
+      const { error } = await supabase.auth.signOut();
+
+      if (error) {
+        return res.status(400).json({
+          success: false,
+          message: error.message
+        });
+      }
+
+      res.json({
+        success: true,
+        message: 'Logout berhasil'
+      });
+
+    } catch (error) {
+      console.error('Logout error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Internal server error'
+      });
+    }
+  }
+
   static async getProfile(req, res) {
     try {
       const userId = req.user.id;
