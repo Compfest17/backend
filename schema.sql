@@ -68,6 +68,7 @@ CREATE TABLE public.forums (
   created_at timestamp without time zone DEFAULT now(),
   updated_at timestamp without time zone DEFAULT now(),
   deleted_at timestamp without time zone,
+  incident_date date NOT NULL DEFAULT CURRENT_DATE,
   CONSTRAINT forums_pkey PRIMARY KEY (id),
   CONSTRAINT forums_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id)
 );

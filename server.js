@@ -9,6 +9,9 @@ const { testConnection } = require('./config/database');
 const { testSupabaseConnection } = require('./config/supabase');
 
 const authRoutes = require('./routes/authRoutes');
+const tagsRoutes = require('./routes/tagsRoutes');
+const forumsRoutes = require('./routes/forumsRoutes');
+const geocodingRoutes = require('./routes/geocodingRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -23,6 +26,9 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 app.use('/api/auth', authRoutes);
+app.use('/api/tags', tagsRoutes);
+app.use('/api/forums', forumsRoutes);
+app.use('/api/geocoding', geocodingRoutes);
 
 app.get('/health', (req, res) => {
   res.status(200).json({
