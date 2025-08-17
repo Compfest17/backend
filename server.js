@@ -12,6 +12,7 @@ const authRoutes = require('./routes/authRoutes');
 const tagsRoutes = require('./routes/tagsRoutes');
 const forumsRoutes = require('./routes/forumsRoutes');
 const geocodingRoutes = require('./routes/geocodingRoutes');
+const contactRoutes = require('./routes/contactRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -29,6 +30,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/tags', tagsRoutes);
 app.use('/api/forums', forumsRoutes);
 app.use('/api/geocoding', geocodingRoutes);
+app.use('/api', contactRoutes);
 
 app.get('/health', (req, res) => {
   res.status(200).json({
