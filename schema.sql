@@ -16,9 +16,20 @@ CREATE TABLE public.comments (
   updated_at timestamp without time zone DEFAULT now(),
   deleted_at timestamp without time zone,
   CONSTRAINT comments_pkey PRIMARY KEY (id),
-  CONSTRAINT comments_parent_id_fkey FOREIGN KEY (parent_id) REFERENCES public.comments(id),
   CONSTRAINT comments_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id),
-  CONSTRAINT comments_forum_id_fkey FOREIGN KEY (forum_id) REFERENCES public.forums(id)
+  CONSTRAINT comments_forum_id_fkey FOREIGN KEY (forum_id) REFERENCES public.forums(id),
+  CONSTRAINT comments_parent_id_fkey FOREIGN KEY (parent_id) REFERENCES public.comments(id)
+);
+CREATE TABLE public.contact_messages (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  full_name character varying NOT NULL,
+  email character varying NOT NULL,
+  phone character varying,
+  message text NOT NULL,
+  status character varying DEFAULT 'unread'::character varying,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT contact_messages_pkey PRIMARY KEY (id)
 );
 CREATE TABLE public.forum_history (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -30,8 +41,8 @@ CREATE TABLE public.forum_history (
   notes text,
   created_at timestamp without time zone DEFAULT now(),
   CONSTRAINT forum_history_pkey PRIMARY KEY (id),
-  CONSTRAINT forum_history_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id),
-  CONSTRAINT forum_history_forum_id_fkey FOREIGN KEY (forum_id) REFERENCES public.forums(id)
+  CONSTRAINT forum_history_forum_id_fkey FOREIGN KEY (forum_id) REFERENCES public.forums(id),
+  CONSTRAINT forum_history_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id)
 );
 CREATE TABLE public.forum_media (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -49,8 +60,8 @@ CREATE TABLE public.forum_tags (
   forum_id uuid NOT NULL,
   tag_id uuid NOT NULL,
   CONSTRAINT forum_tags_pkey PRIMARY KEY (forum_id, tag_id),
-  CONSTRAINT forum_tags_forum_id_fkey FOREIGN KEY (forum_id) REFERENCES public.forums(id),
-  CONSTRAINT forum_tags_tag_id_fkey FOREIGN KEY (tag_id) REFERENCES public.tags(id)
+  CONSTRAINT forum_tags_tag_id_fkey FOREIGN KEY (tag_id) REFERENCES public.tags(id),
+  CONSTRAINT forum_tags_forum_id_fkey FOREIGN KEY (forum_id) REFERENCES public.forums(id)
 );
 CREATE TABLE public.forums (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -69,6 +80,7 @@ CREATE TABLE public.forums (
   updated_at timestamp without time zone DEFAULT now(),
   deleted_at timestamp without time zone,
   incident_date date NOT NULL DEFAULT CURRENT_DATE,
+  views_count character varying,
   CONSTRAINT forums_pkey PRIMARY KEY (id),
   CONSTRAINT forums_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id)
 );
@@ -92,8 +104,8 @@ CREATE TABLE public.notifications (
   created_at timestamp without time zone DEFAULT now(),
   read_at timestamp without time zone,
   CONSTRAINT notifications_pkey PRIMARY KEY (id),
-  CONSTRAINT notifications_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id),
-  CONSTRAINT notifications_forum_id_fkey FOREIGN KEY (forum_id) REFERENCES public.forums(id)
+  CONSTRAINT notifications_forum_id_fkey FOREIGN KEY (forum_id) REFERENCES public.forums(id),
+  CONSTRAINT notifications_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id)
 );
 CREATE TABLE public.reactions (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -103,9 +115,9 @@ CREATE TABLE public.reactions (
   type USER-DEFINED,
   created_at timestamp without time zone DEFAULT now(),
   CONSTRAINT reactions_pkey PRIMARY KEY (id),
-  CONSTRAINT reactions_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id),
+  CONSTRAINT reactions_comment_id_fkey FOREIGN KEY (comment_id) REFERENCES public.comments(id),
   CONSTRAINT reactions_forum_id_fkey FOREIGN KEY (forum_id) REFERENCES public.forums(id),
-  CONSTRAINT reactions_comment_id_fkey FOREIGN KEY (comment_id) REFERENCES public.comments(id)
+  CONSTRAINT reactions_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id)
 );
 CREATE TABLE public.roles (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -137,6 +149,6 @@ CREATE TABLE public.users (
   updated_at timestamp without time zone DEFAULT now(),
   deleted_at timestamp without time zone,
   CONSTRAINT users_pkey PRIMARY KEY (id),
-  CONSTRAINT users_level_id_fkey FOREIGN KEY (level_id) REFERENCES public.levels(id),
-  CONSTRAINT users_role_id_fkey FOREIGN KEY (role_id) REFERENCES public.roles(id)
+  CONSTRAINT users_role_id_fkey FOREIGN KEY (role_id) REFERENCES public.roles(id),
+  CONSTRAINT users_level_id_fkey FOREIGN KEY (level_id) REFERENCES public.levels(id)
 );

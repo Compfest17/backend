@@ -13,6 +13,10 @@ const tagsRoutes = require('./routes/tagsRoutes');
 const forumsRoutes = require('./routes/forumsRoutes');
 const geocodingRoutes = require('./routes/geocodingRoutes');
 const contactRoutes = require('./routes/contactRoutes');
+const employeeRoutes = require('./routes/employeeRoutes');
+const pointRoutes = require('./routes/pointRoutes');
+const dashboardRoutes = require('./routes/dashboardRoutes');
+const notificationRoutes = require('./routes/notificationRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -30,6 +34,10 @@ app.use('/api/auth', authRoutes);
 app.use('/api/tags', tagsRoutes);
 app.use('/api/forums', forumsRoutes);
 app.use('/api/geocoding', geocodingRoutes);
+app.use('/api/employee', employeeRoutes);
+app.use('/api/points', pointRoutes);
+app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/notifications', notificationRoutes);
 app.use('/api', contactRoutes);
 
 app.get('/health', (req, res) => {

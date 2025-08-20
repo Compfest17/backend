@@ -118,9 +118,17 @@ class ValidationUtils {
       errors.push('Username maksimal 30 karakter');
     }
     
-    const usernameRegex = /^[a-zA-Z0-9_-]+$/;
+    if (trimmedUsername !== trimmedUsername.toLowerCase()) {
+      errors.push('Username harus menggunakan huruf kecil semua');
+    }
+    
+    if (trimmedUsername.includes(' ')) {
+      errors.push('Username tidak boleh mengandung spasi');
+    }
+    
+    const usernameRegex = /^[a-z0-9_-]+$/;
     if (!usernameRegex.test(trimmedUsername)) {
-      errors.push('Username hanya boleh mengandung huruf, angka, underscore, dan tanda hubung');
+      errors.push('Username hanya boleh mengandung huruf kecil, angka, underscore, dan tanda hubung');
     }
     
     if (/^[0-9]/.test(trimmedUsername)) {

@@ -64,7 +64,8 @@ class AuthController {
         password,
         options: {
           data: {
-            full_name
+            full_name,
+            referral_code: sanitizedData.referral_code || null
           }
         }
       });
@@ -81,7 +82,7 @@ class AuthController {
 
       await new Promise(resolve => setTimeout(resolve, 100));
 
-      const newUser = await User.findByEmail(email);
+      let newUser = await User.findByEmail(email);
       
       if (!newUser) {
         return res.status(500).json({
@@ -90,11 +91,33 @@ class AuthController {
         });
       }
 
+      let upgradeMessage = '';
+      if (sanitizedData.referral_code) {
+        try {
+          console.log('Trying to upgrade with referral code:', sanitizedData.referral_code);
+          const EmployeeCode = require('../models/EmployeeCode');
+          const validation = await EmployeeCode.validateCode(sanitizedData.referral_code, newUser.id);
+          console.log('Validation result:', validation);
+          
+          if (validation.isValid) {
+            console.log('Code valid, upgrading user...');
+            newUser = await User.upgradeToEmployee(newUser.id, sanitizedData.referral_code);
+            await EmployeeCode.markCodeAsUsed(validation.codeData.id, newUser.id);
+            upgradeMessage = ' Akun berhasil diupgrade menjadi karyawan!';
+            console.log('User upgraded successfully:', newUser.roles?.name);
+          } else {
+            console.log('Code invalid:', validation.message);
+          }
+        } catch (upgradeError) {
+          console.log('Referral code upgrade failed during registration:', upgradeError);
+        }
+      }
+
       const token = AuthController.createToken(newUser);
 
       res.status(201).json({
         success: true,
-        message: 'Akun berhasil dibuat',
+        message: `Akun berhasil dibuat!${upgradeMessage}`,
         data: {
           user: {
             id: newUser.id,
@@ -234,9 +257,14 @@ class AuthController {
             username: user.username,
             phone: user.phone,
             avatar_url: user.avatar_url,
+            banner_url: user.banner_url,
             created_at: user.created_at,
             role: user.roles?.name,
-            level: user.levels
+            levels: user.levels,
+            current_points: user.current_points || 0,
+            assigned_province: user.assigned_province,
+            assigned_city: user.assigned_city,
+            coverage_coordinates: user.coverage_coordinates
           }
         }
       });
@@ -253,9 +281,14 @@ class AuthController {
   static async updateProfile(req, res) {
     try {
       const userId = req.user.id;
-      const { full_name, username, phone } = req.body;
+      const { full_name, username, phone, avatar_url, banner_url } = req.body;
 
-      if (!full_name && !username && !phone) {
+      console.log('🔧 Backend UpdateProfile Debug:', {
+        userId,
+        receivedData: { full_name, username, phone, avatar_url, banner_url }
+      });
+
+      if (!full_name && !username && !phone && !avatar_url && !banner_url) {
         return res.status(400).json({
           success: false,
           message: 'Minimal satu field harus diisi'
@@ -266,8 +299,19 @@ class AuthController {
       if (full_name) updateData.full_name = full_name;
       if (username) updateData.username = username;
       if (phone) updateData.phone = phone;
+      if (avatar_url !== undefined) updateData.avatar_url = avatar_url;
+      if (banner_url !== undefined) updateData.banner_url = banner_url;
 
       const updatedUser = await User.update(userId, updateData);
+
+      console.log('🔧 Backend Update Success:', {
+        updateData,
+        updatedUserResult: {
+          id: updatedUser.id,
+          avatar_url: updatedUser.avatar_url,
+          banner_url: updatedUser.banner_url
+        }
+      });
 
       res.json({
         success: true,
@@ -280,8 +324,10 @@ class AuthController {
             username: updatedUser.username,
             phone: updatedUser.phone,
             avatar_url: updatedUser.avatar_url,
+            banner_url: updatedUser.banner_url,
+            current_points: updatedUser.current_points || 0,
             role: updatedUser.roles?.name,
-            level: updatedUser.levels?.name
+            levels: updatedUser.levels
           }
         }
       });

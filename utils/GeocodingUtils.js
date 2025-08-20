@@ -3,12 +3,7 @@ const axios = require('axios');
 class GeocodingUtils {
   static NOMINATIM_BASE_URL = 'https://nominatim.openstreetmap.org';
   
-  /**
-   * Search addresses using OSM Nominatim
-   * @param {string} query - Address query
-   * @param {object} options - Search options
-   * @returns {Promise<Array>} - Array of address suggestions
-   */
+
   static async searchAddresses(query, options = {}) {
     try {
       const {
@@ -56,12 +51,7 @@ class GeocodingUtils {
     }
   }
 
-  /**
-   * Reverse geocoding - convert coordinates to address
-   * @param {number} lat - Latitude
-   * @param {number} lon - Longitude
-   * @returns {Promise<object>} - Address object
-   */
+
   static async reverseGeocode(lat, lon) {
     try {
       const params = new URLSearchParams({
@@ -100,12 +90,7 @@ class GeocodingUtils {
     }
   }
 
-  /**
-   * Validate coordinates
-   * @param {number} lat - Latitude
-   * @param {number} lon - Longitude
-   * @returns {boolean} - True if valid
-   */
+
   static validateCoordinates(lat, lon) {
     const latitude = parseFloat(lat);
     const longitude = parseFloat(lon);
@@ -118,12 +103,7 @@ class GeocodingUtils {
            longitude <= 180;
   }
 
-  /**
-   * Check if coordinates are within Indonesia bounds (approximate)
-   * @param {number} lat - Latitude
-   * @param {number} lon - Longitude
-   * @returns {boolean} - True if within Indonesia
-   */
+
   static isWithinIndonesia(lat, lon) {
     const latitude = parseFloat(lat);
     const longitude = parseFloat(lon);
@@ -132,6 +112,76 @@ class GeocodingUtils {
            latitude <= 6 && 
            longitude >= 95 && 
            longitude <= 141;
+  }
+
+
+  static async getIndonesianProvinces() {
+    try {
+      const provinces = [
+        'Aceh', 'Sumatera Utara', 'Sumatera Barat', 'Riau', 'Jambi', 
+        'Sumatera Selatan', 'Bengkulu', 'Lampung', 'Kepulauan Bangka Belitung',
+        'Kepulauan Riau', 'DKI Jakarta', 'Jawa Barat', 'Jawa Tengah', 
+        'DI Yogyakarta', 'Jawa Timur', 'Banten', 'Bali', 'Nusa Tenggara Barat',
+        'Nusa Tenggara Timur', 'Kalimantan Barat', 'Kalimantan Tengah',
+        'Kalimantan Selatan', 'Kalimantan Timur', 'Kalimantan Utara',
+        'Sulawesi Utara', 'Sulawesi Tengah', 'Sulawesi Selatan', 
+        'Sulawesi Tenggara', 'Gorontalo', 'Sulawesi Barat', 'Maluku',
+        'Maluku Utara', 'Papua Barat', 'Papua'
+      ];
+
+      const provinceData = await Promise.all(
+        provinces.map(async (provinceName) => {
+          try {
+            const searchResults = await this.searchAddresses(`${provinceName}, Indonesia`, {
+              limit: 1,
+              countryCode: 'id'
+            });
+            
+            if (searchResults.length > 0) {
+              const result = searchResults[0];
+              return {
+                name: provinceName,
+                lat: result.lat,
+                lon: result.lon,
+                display_name: result.display_name,
+                bounds: result.boundingbox || null
+              };
+            }
+            
+            return { name: provinceName, lat: null, lon: null };
+          } catch (error) {
+            console.error(`Failed to geocode ${provinceName}:`, error);
+            return { name: provinceName, lat: null, lon: null };
+          }
+        })
+      );
+
+      return provinceData.filter(province => province.lat && province.lon);
+    } catch (error) {
+      console.error('Failed to fetch Indonesian provinces:', error);
+      throw new Error('Failed to fetch province data');
+    }
+  }
+
+
+  static extractProvinceFromAddress(address) {
+    if (!address) return null;
+    
+    const parts = address.split(',').map(part => part.trim());
+    return parts[parts.length - 1] || null;
+  }
+
+
+  static calculateDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = 
+      Math.sin(dLat/2) * Math.sin(dLat/2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+      Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
   }
 }
 
