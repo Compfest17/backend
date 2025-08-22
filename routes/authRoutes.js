@@ -2,11 +2,12 @@ const express = require('express');
 const AuthController = require('../controllers/AuthController');
 const User = require('../models/User');
 const { authenticateToken, requireRole } = require('../middleware/auth');
+const verifyTurnstile = require('../middleware/turnstile');
 
 const router = express.Router();
 
-router.post('/register', AuthController.register);
-router.post('/login', AuthController.login);
+router.post('/register', verifyTurnstile, AuthController.register);
+router.post('/login', verifyTurnstile, AuthController.login);
 router.post('/logout', AuthController.logout);
 router.post('/confirm-email', AuthController.confirmEmail);
 router.post('/resend-confirmation', AuthController.resendConfirmation);

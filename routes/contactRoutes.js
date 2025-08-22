@@ -1,6 +1,7 @@
 const express = require('express');
 const ContactController = require('../controllers/ContactController');
 const { body, validationResult } = require('express-validator');
+const verifyTurnstile = require('../middleware/turnstile');
 
 const router = express.Router();
 
@@ -49,7 +50,7 @@ const handleValidationErrors = (req, res, next) => {
   next();
 };
 
-router.post('/contact', validateContactForm, handleValidationErrors, ContactController.submitContactMessage);
+router.post('/contact', verifyTurnstile, validateContactForm, handleValidationErrors, ContactController.submitContactMessage);
 router.get('/contact', ContactController.getContactMessages);
 router.put('/contact/:id/status', ContactController.updateContactMessageStatus);
 
