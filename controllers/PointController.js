@@ -14,7 +14,7 @@ class PointController {
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('❌ Error fetching point rules:', error);
+        console.error('Error fetching point rules:', error);
         return res.status(500).json({ error: error.message });
       }
 
@@ -24,7 +24,7 @@ class PointController {
       });
 
     } catch (error) {
-      console.error('❌ PointController.getPointRules error:', error);
+      console.error('PointController.getPointRules error:', error);
       res.status(500).json({ error: error.message });
     }
   }
@@ -56,11 +56,9 @@ class PointController {
         .single();
 
       if (error) {
-        console.error('❌ Error creating point rule:', error);
+        console.error('Error creating point rule:', error);
         return res.status(500).json({ error: error.message });
       }
-
-      console.log(`✅ Created point rule: ${event_type} = ${points} points`);
 
       res.json({
         success: true,
@@ -69,7 +67,7 @@ class PointController {
       });
 
     } catch (error) {
-      console.error('❌ PointController.createPointRule error:', error);
+      console.error('PointController.createPointRule error:', error);
       res.status(500).json({ error: error.message });
     }
   }
@@ -102,7 +100,7 @@ class PointController {
         .single();
 
       if (error) {
-        console.error('❌ Error updating point rule:', error);
+        console.error('Error updating point rule:', error);
         return res.status(500).json({ error: error.message });
       }
 
@@ -110,7 +108,6 @@ class PointController {
         return res.status(404).json({ error: 'Point rule not found' });
       }
 
-      console.log(`✅ Updated point rule: ${ruleId}`);
 
       res.json({
         success: true,
@@ -119,7 +116,7 @@ class PointController {
       });
 
     } catch (error) {
-      console.error('❌ PointController.updatePointRule error:', error);
+      console.error('PointController.updatePointRule error:', error);
       res.status(500).json({ error: error.message });
     }
   }
@@ -139,11 +136,10 @@ class PointController {
         .eq('id', ruleId);
 
       if (error) {
-        console.error('❌ Error deleting point rule:', error);
+        console.error('Error deleting point rule:', error);
         return res.status(500).json({ error: error.message });
       }
 
-      console.log(`✅ Deleted point rule: ${ruleId}`);
 
       res.json({
         success: true,
@@ -151,7 +147,7 @@ class PointController {
       });
 
     } catch (error) {
-      console.error('❌ PointController.deletePointRule error:', error);
+      console.error('PointController.deletePointRule error:', error);
       res.status(500).json({ error: error.message });
     }
   }
@@ -159,11 +155,6 @@ class PointController {
 
   static async manualAdjustment(req, res) {
     try {
-      console.log('🔍 Manual adjustment request:', {
-        user: req.user,
-        userRole: req.user?.roles?.name,
-        body: req.body
-      });
       
       const { username, points, reason } = req.body;
 
@@ -208,7 +199,7 @@ class PointController {
       });
 
     } catch (error) {
-      console.error('❌ PointController.manualAdjustment error:', error);
+      console.error('PointController.manualAdjustment error:', error);
       res.status(500).json({ error: error.message });
     }
   }
@@ -236,7 +227,7 @@ class PointController {
       });
 
     } catch (error) {
-      console.error('❌ PointController.getUserPointHistory error:', error);
+      console.error('PointController.getUserPointHistory error:', error);
       res.status(500).json({ error: error.message });
     }
   }
@@ -253,7 +244,7 @@ class PointController {
         .select('points');
 
       if (totalError) {
-        console.error('❌ Error fetching point statistics:', totalError);
+        console.error('Error fetching point statistics:', totalError);
         return res.status(500).json({ error: totalError.message });
       }
 
@@ -264,7 +255,7 @@ class PointController {
         .select('event_type, points');
 
       if (eventError) {
-        console.error('❌ Error fetching event statistics:', eventError);
+        console.error('Error fetching event statistics:', eventError);
         return res.status(500).json({ error: eventError.message });
       }
 
@@ -280,7 +271,7 @@ class PointController {
         .limit(10);
 
       if (topError) {
-        console.error('❌ Error fetching top users:', topError);
+        console.error('Error fetching top users:', topError);
         return res.status(500).json({ error: topError.message });
       }
 
@@ -295,7 +286,7 @@ class PointController {
       });
 
     } catch (error) {
-      console.error('❌ PointController.getPointStatistics error:', error);
+      console.error('PointController.getPointStatistics error:', error);
       res.status(500).json({ error: error.message });
     }
   }

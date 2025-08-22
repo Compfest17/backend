@@ -283,11 +283,6 @@ class AuthController {
       const userId = req.user.id;
       const { full_name, username, phone, avatar_url, banner_url } = req.body;
 
-      console.log('🔧 Backend UpdateProfile Debug:', {
-        userId,
-        receivedData: { full_name, username, phone, avatar_url, banner_url }
-      });
-
       if (!full_name && !username && !phone && !avatar_url && !banner_url) {
         return res.status(400).json({
           success: false,
@@ -303,15 +298,6 @@ class AuthController {
       if (banner_url !== undefined) updateData.banner_url = banner_url;
 
       const updatedUser = await User.update(userId, updateData);
-
-      console.log('🔧 Backend Update Success:', {
-        updateData,
-        updatedUserResult: {
-          id: updatedUser.id,
-          avatar_url: updatedUser.avatar_url,
-          banner_url: updatedUser.banner_url
-        }
-      });
 
       res.json({
         success: true,

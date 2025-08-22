@@ -12,8 +12,6 @@ class ContactController {
         });
       }
 
-      console.log('ContactController: Submitting contact message:', { fullName, email, phone: phone || 'N/A' });
-
       const { data, error: dbError } = await supabaseAdmin
         .from('contact_messages')
         .insert([
@@ -35,7 +33,6 @@ class ContactController {
         });
       }
 
-      console.log('ContactController: Contact message saved successfully:', data);
 
       res.status(201).json({
         success: true,

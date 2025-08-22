@@ -312,7 +312,6 @@ class User {
 
   static async getAssignedReports(employeeId, filters = {}) {
     try {
-      console.log('report_assignments table no longer exists, using province-based fallback');
       
       const employee = await this.findById(employeeId);
       
@@ -332,12 +331,25 @@ class User {
           status,
           priority,
           created_at,
-          incident_date
+          in_progress_at,
+          resolved_at,
+          closed_at,
+          incident_date,
+          updated_at
         `)
         .ilike('address', `%${employee.assigned_province}%`);
 
       if (filters.reportStatus) {
-        query = query.eq('status', filters.reportStatus);
+        const statuses = Array.isArray(filters.reportStatus)
+          ? filters.reportStatus
+          : String(filters.reportStatus).includes(',')
+            ? String(filters.reportStatus).split(',').map(s => s.trim()).filter(Boolean)
+            : null;
+        if (statuses && statuses.length > 0) {
+          query = query.in('status', statuses);
+        } else {
+          query = query.eq('status', filters.reportStatus);
+        }
       }
       if (filters.priority) {
         query = query.eq('priority', filters.priority);

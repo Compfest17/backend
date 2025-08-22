@@ -4,7 +4,20 @@ class PointSystem {
 
   static async awardPoints(userId, eventType, eventCondition = null, relatedIds = {}, awardedBy = null, customDescription = null) {
     try {
-      console.log(`🎯 PointSystem: Processing ${eventType} for user ${userId}`);
+      try {
+        const { data: userRow } = await supabaseAdmin
+          .from('users')
+          .select('roles(name)')
+          .eq('id', userId)
+          .single();
+        const roleName = userRow?.roles?.name;
+        if (roleName === 'admin' || roleName === 'karyawan') {
+          
+          return { success: true, points: 0, message: 'Role not eligible for points' };
+        }
+      } catch (e) {
+        
+      }
       
       let query = supabaseAdmin
         .from('point_rules')
@@ -21,12 +34,12 @@ class PointSystem {
       const { data: rules, error: ruleError } = await query;
 
       if (ruleError) {
-        console.error('❌ Error fetching point rules:', ruleError);
+        console.error('Error fetching point rules:', ruleError);
         return { success: false, error: ruleError.message };
       }
 
       if (!rules || rules.length === 0) {
-        console.log(`ℹ️  No active rule found for ${eventType} with condition: ${eventCondition}`);
+        
         return { success: true, points: 0, message: 'No rule applies' };
       }
 
@@ -34,7 +47,7 @@ class PointSystem {
       const pointsToAward = rule.points;
 
       if (pointsToAward === 0) {
-        console.log(`ℹ️  Rule found but awards 0 points for ${eventType}`);
+        
         return { success: true, points: 0, message: 'Rule awards 0 points' };
       }
 
@@ -58,7 +71,7 @@ class PointSystem {
         .single();
 
       if (transactionError) {
-        console.error('❌ Error recording point transaction:', transactionError);
+        console.error('Error recording point transaction:', transactionError);
         return { success: false, error: transactionError.message };
       }
 
@@ -69,7 +82,7 @@ class PointSystem {
         .single();
 
       if (getCurrentError) {
-        console.error('❌ Error getting current user points:', getCurrentError);
+        console.error('Error getting current user points:', getCurrentError);
         return { success: false, error: getCurrentError.message };
       }
 
@@ -87,7 +100,7 @@ class PointSystem {
         .single();
 
       if (updateError) {
-        console.error('❌ Error updating user points:', updateError);
+        console.error('Error updating user points:', updateError);
         return { success: false, error: updateError.message };
       }
 
@@ -95,7 +108,7 @@ class PointSystem {
 
       await this.sendPointNotification(userId, pointsToAward, rule.description);
 
-      console.log(`✅ Awarded ${pointsToAward} points to user ${userId} for ${eventType}`);
+      
 
       return {
         success: true,
@@ -106,7 +119,7 @@ class PointSystem {
       };
 
     } catch (error) {
-      console.error('❌ PointSystem.awardPoints error:', error);
+      console.error('PointSystem.awardPoints error:', error);
       return { success: false, error: error.message };
     }
   }
@@ -114,7 +127,7 @@ class PointSystem {
 
   static async manualAdjustment(adminId, userId, points, reason) {
     try {
-      console.log(`🔧 Manual point adjustment: ${points} points for user ${userId} by admin ${adminId}`);
+      
 
       const transactionData = {
         user_id: userId,
@@ -136,7 +149,7 @@ class PointSystem {
         .single();
 
       if (transactionError) {
-        console.error('❌ Error recording manual adjustment:', transactionError);
+        console.error('Error recording manual adjustment:', transactionError);
         return { success: false, error: transactionError.message };
       }
 
@@ -147,7 +160,7 @@ class PointSystem {
         .single();
 
       if (getCurrentError) {
-        console.error('❌ Error getting current user points:', getCurrentError);
+        console.error('Error getting current user points:', getCurrentError);
         return { success: false, error: getCurrentError.message };
       }
 
@@ -165,7 +178,7 @@ class PointSystem {
         .single();
 
       if (updateError) {
-        console.error('❌ Error updating user points:', updateError);
+        console.error('Error updating user points:', updateError);
         return { success: false, error: updateError.message };
       }
 
@@ -177,7 +190,7 @@ class PointSystem {
       
       await this.sendPointNotification(userId, points, message);
 
-      console.log(`✅ Manual adjustment complete: ${points} points for user ${userId}`);
+      
 
       return {
         success: true,
@@ -188,7 +201,7 @@ class PointSystem {
       };
 
     } catch (error) {
-      console.error('❌ PointSystem.manualAdjustment error:', error);
+      console.error('PointSystem.manualAdjustment error:', error);
       return { success: false, error: error.message };
     }
   }
@@ -196,16 +209,27 @@ class PointSystem {
 
   static async checkAndUpdateUserLevel(userId, currentPoints) {
     try {
+      const { data: currentUser } = await supabaseAdmin
+        .from('users')
+        .select('level_id')
+        .eq('id', userId)
+        .single();
+
       const { data: level, error: levelError } = await supabaseAdmin
         .from('levels')
         .select('*')
-        .lte('min_points', currentPoints)
-        .order('min_points', { ascending: false })
+        .lte('points', currentPoints)
+        .order('points', { ascending: false })
         .limit(1)
         .single();
 
       if (levelError || !level) {
-        console.log('ℹ️  No level found for points:', currentPoints);
+        
+        return;
+      }
+
+      if (currentUser && currentUser.level_id === level.id) {
+        
         return;
       }
 
@@ -215,13 +239,20 @@ class PointSystem {
         .eq('id', userId);
 
       if (updateError) {
-        console.error('❌ Error updating user level:', updateError);
+        console.error('Error updating user level:', updateError);
       } else {
-        console.log(`📈 Updated user ${userId} to level: ${level.name}`);
+        
+        try {
+          const NotificationService = require('./NotificationService');
+          await NotificationService.sendLevelUpNotification(userId, level.name, level.points);
+          
+        } catch (notifError) {
+          console.error('Failed to send level up notification:', notifError);
+        }
       }
 
     } catch (error) {
-      console.error('❌ Error checking user level:', error);
+      console.error('Error checking user level:', error);
     }
   }
 
@@ -240,10 +271,10 @@ class PointSystem {
         .from('notifications')
         .insert([notificationData]);
 
-      console.log(`📢 Point notification sent to user ${userId}`);
+      
 
     } catch (error) {
-      console.error('❌ Error sending point notification:', error);
+      console.error('Error sending point notification:', error);
     }
   }
 
@@ -264,14 +295,14 @@ class PointSystem {
         .limit(limit);
 
       if (error) {
-        console.error('❌ Error fetching point history:', error);
+        console.error('Error fetching point history:', error);
         return { success: false, error: error.message };
       }
 
       return { success: true, history: data };
 
     } catch (error) {
-      console.error('❌ PointSystem.getUserPointHistory error:', error);
+      console.error('PointSystem.getUserPointHistory error:', error);
       return { success: false, error: error.message };
     }
   }

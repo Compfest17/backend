@@ -1,19 +1,18 @@
 require('dotenv').config();
 const { createClient } = require('@supabase/supabase-js');
-const supabase = createClient(
+
+const supabaseAdmin = createClient(
   process.env.SUPABASE_URL,
-  process.env.SUPABASE_ANON_KEY
+  process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
 class NotificationController {
-  /**
-   * Get all notifications for authenticated user
-   */
   static async getUserNotifications(req, res) {
     try {
       const userId = req.user.id;
       
-      const { data: notifications, error } = await supabase
+      
+      const { data: notifications, error } = await supabaseAdmin
         .from('notifications')
         .select(`
           id,
@@ -43,18 +42,65 @@ class NotificationController {
         });
       }
 
-      const transformedNotifications = notifications.map(notification => ({
-        id: notification.id,
-        type: this.getNotificationType(notification.type),
-        category: 'general',
-        user: this.extractUsername(notification.title, notification.message),
-        action: this.extractAction(notification.message),
-        content: notification.forums?.title || this.extractContent(notification.message),
-        time: this.formatTime(notification.created_at),
-        read: notification.is_read,
-        avatar: '/image/forum/test/profil-test.jpg',
-        forum_id: notification.forum_id
-      }));
+
+      const transformedNotifications = await Promise.all(
+        notifications.map(async (notification) => {
+          const user = NotificationController.extractUsername(notification.title, notification.message);
+          const action = NotificationController.extractAction(notification.message);
+          const content = NotificationController.extractContent(notification.message) || notification.forums?.title || '';
+
+          let role = null;
+          try {
+            const raw = (notification.title || '').trim();
+            if (raw) {
+              if (raw.startsWith('@')) {
+                const key = raw.substring(1);
+                if (key) {
+                  const { data: byU } = await supabaseAdmin
+                    .from('users')
+                    .select('id, roles(name)')
+                    .eq('username', key)
+                    .single();
+                  role = byU?.roles?.name || null;
+                }
+              } else {
+                let found = null;
+                const { data: byUsername } = await supabaseAdmin
+                  .from('users')
+                  .select('id, roles(name)')
+                  .eq('username', raw)
+                  .single();
+                if (byUsername) {
+                  found = byUsername;
+                } else {
+                  const { data: byFull } = await supabaseAdmin
+                    .from('users')
+                    .select('id, roles(name)')
+                    .eq('full_name', raw)
+                    .single();
+                  if (byFull) found = byFull;
+                }
+                role = found?.roles?.name || null;
+              }
+            }
+          } catch {}
+
+          return {
+            id: notification.id,
+            type: NotificationController.getNotificationType(notification.type),
+            category: 'general',
+            user,
+            action,
+            content,
+            time: NotificationController.formatTime(notification.created_at),
+            read: notification.is_read,
+            avatar: '/image/forum/test/profil-test.jpg',
+            forum_id: notification.forum_id,
+            role
+          };
+        })
+      );
+
 
       return res.status(200).json({
         success: true,
@@ -75,15 +121,12 @@ class NotificationController {
     }
   }
 
-  /**
-   * Mark notification as read
-   */
   static async markAsRead(req, res) {
     try {
       const { id } = req.params;
       const userId = req.user.id;
 
-      const { error } = await supabase
+      const { error } = await supabaseAdmin
         .from('notifications')
         .update({ 
           is_read: true, 
@@ -115,14 +158,11 @@ class NotificationController {
     }
   }
 
-  /**
-   * Mark all notifications as read
-   */
   static async markAllAsRead(req, res) {
     try {
       const userId = req.user.id;
 
-      const { error } = await supabase
+      const { error } = await supabaseAdmin
         .from('notifications')
         .update({ 
           is_read: true, 
@@ -154,14 +194,11 @@ class NotificationController {
     }
   }
 
-  /**
-   * Get unread notification count
-   */
   static async getUnreadCount(req, res) {
     try {
       const userId = req.user.id;
 
-      const { count, error } = await supabase
+      const { count, error } = await supabaseAdmin
         .from('notifications')
         .select('*', { count: 'exact', head: true })
         .eq('user_id', userId)
@@ -195,6 +232,7 @@ class NotificationController {
   static getNotificationType(dbType) {
     const typeMap = {
       'forum_update': 'system',
+      'forum_comment': 'comment',
       'comment_reply': 'comment', 
       'status_change': 'system',
       'system': 'system',
@@ -206,25 +244,23 @@ class NotificationController {
   }
 
   static extractUsername(title, message) {
-    if (title.includes('Sistem GatotKota')) return 'Sistem GatotKota';
-    if (title.includes('Dinas')) return title.split(' ')[0] + ' ' + title.split(' ')[1];
-    
-    const mentionMatch = message.match(/@(\w+)/);
-    if (mentionMatch) return `@${mentionMatch[1]}`;
-    
+    if (title && title.trim().length > 0) {
+      return title.trim();
+    }
+    if (message.includes('Sistem GatotKota')) return 'Sistem GatotKota';
     const actionWords = ['menyukai', 'mengomentari', 'menyebut', 'memperbarui'];
     for (const word of actionWords) {
       if (message.includes(word)) {
         return message.split(word)[0].trim();
       }
     }
-    
-    return title.split(' ')[0] || 'User';
+    return 'User';
   }
 
   static extractAction(message) {
-    if (message.includes('menyukai')) return 'menyukai laporan Anda';
-    if (message.includes('mengomentari')) return 'mengomentari laporan Anda';
+    if (message.includes('menyukai')) return 'menyukai postingan Anda';
+    if (message.includes('mengomentari')) return 'mengomentari postingan Anda:';
+    if (message.includes('membalas')) return 'membalas komentar Anda:';
     if (message.includes('menyebut')) return 'menyebut Anda dalam komentar:';
     if (message.includes('diverifikasi')) return 'Laporan Anda telah diverifikasi oleh admin dan sedang dalam proses penanganan.';
     if (message.includes('Selesai')) return 'memperbarui status laporan Anda menjadi "Selesai".';
@@ -240,15 +276,15 @@ class NotificationController {
   }
 
   static formatTime(createdAt) {
+    const created = new Date(createdAt + 'Z');
     const now = new Date();
-    const notificationTime = new Date(createdAt);
-    const diffInSeconds = Math.floor((now - notificationTime) / 1000);
-    
+    const diffInSeconds = Math.floor((now.getTime() - created.getTime()) / 1000);
+
     if (diffInSeconds < 60) return `${diffInSeconds}d`;
     if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m`;
     if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}j`;
     if (diffInSeconds < 2592000) return `${Math.floor(diffInSeconds / 86400)}h`;
-    
+
     return `${Math.floor(diffInSeconds / 2592000)}bln`;
   }
 }

@@ -52,6 +52,84 @@ class GeocodingController {
 
   static _provinceBoundaryCache = new Map();
 
+  static _round(num, precision = 5) {
+    const factor = Math.pow(10, precision);
+    return Math.round(num * factor) / factor;
+  }
+
+  static _simplifyCoords(coords, step = 1) {
+    if (!Array.isArray(coords)) return coords;
+    if (step <= 1) return coords;
+    const simplified = [];
+    for (let i = 0; i < coords.length; i += step) {
+      const pt = coords[i];
+      if (Array.isArray(pt) && typeof pt[0] === 'number') {
+        simplified.push([GeocodingController._round(pt[0]), GeocodingController._round(pt[1])]);
+      } else if (Array.isArray(pt)) {
+        simplified.push(GeocodingController._simplifyCoords(pt, step));
+      }
+    }
+    if (simplified.length > 2) {
+      const first = simplified[0];
+      const last = simplified[simplified.length - 1];
+      if (first[0] !== last[0] || first[1] !== last[1]) simplified.push(first);
+    }
+    return simplified;
+  }
+
+  static _simplifyGeoJSON(geojson) {
+    try {
+      const densityStep = 2; 
+      const round = GeocodingController._round;
+      const simplify = (g) => {
+        if (!g) return g;
+        if (g.type === 'Polygon') {
+          return {
+            type: 'Polygon',
+            coordinates: g.coordinates.map(ring => GeocodingController._simplifyCoords(ring, densityStep))
+          };
+        }
+        if (g.type === 'MultiPolygon') {
+          return {
+            type: 'MultiPolygon',
+            coordinates: g.coordinates.map(poly => poly.map(ring => GeocodingController._simplifyCoords(ring, densityStep)))
+          };
+        }
+        if (g.type === 'LineString') {
+          return {
+            type: 'LineString',
+            coordinates: GeocodingController._simplifyCoords(g.coordinates, densityStep)
+          };
+        }
+        if (g.type === 'MultiLineString') {
+          return {
+            type: 'MultiLineString',
+            coordinates: g.coordinates.map(line => GeocodingController._simplifyCoords(line, densityStep))
+          };
+        }
+        if (g.type === 'Point') {
+          return { type: 'Point', coordinates: [round(g.coordinates[0]), round(g.coordinates[1])] };
+        }
+        if (g.type === 'MultiPoint') {
+          return { type: 'MultiPoint', coordinates: g.coordinates.map(pt => [round(pt[0]), round(pt[1])]) };
+        }
+        if (g.type === 'GeometryCollection') {
+          return { type: 'GeometryCollection', geometries: (g.geometries || []).map(simplify) };
+        }
+        if (g.type === 'Feature') {
+          return { type: 'Feature', properties: g.properties || {}, geometry: simplify(g.geometry) };
+        }
+        if (g.type === 'FeatureCollection') {
+          return { type: 'FeatureCollection', features: (g.features || []).map(simplify) };
+        }
+        return g;
+      };
+      return simplify(geojson);
+    } catch (e) {
+      return geojson;
+    }
+  }
+
   static async getProvinceBoundary(req, res) {
     try {
       const { province } = req.query;
@@ -63,6 +141,7 @@ class GeocodingController {
       const cached = GeocodingController._provinceBoundaryCache.get(cacheKey);
       const now = Date.now();
       if (cached && (now - cached.timestamp) < 24 * 60 * 60 * 1000) {
+        res.set('Cache-Control', 'public, max-age=86400');
         return res.json({ success: true, data: cached.data, cached: true });
       }
 
@@ -93,15 +172,18 @@ class GeocodingController {
         return res.status(404).json({ success: false, message: 'Boundary not found' });
       }
 
+      const simplified = GeocodingController._simplifyGeoJSON(chosen.geojson);
+
       const data = {
         name: chosen.address?.state || chosen.address?.province || province,
         center: { lat: parseFloat(chosen.lat), lon: parseFloat(chosen.lon) },
         boundingbox: chosen.boundingbox,
-        geojson: chosen.geojson
+        geojson: simplified
       };
 
       GeocodingController._provinceBoundaryCache.set(cacheKey, { timestamp: now, data });
 
+      res.set('Cache-Control', 'public, max-age=86400');
       res.json({ success: true, data });
     } catch (error) {
       console.error('Province boundary error:', error);

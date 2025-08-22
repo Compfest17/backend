@@ -333,10 +333,10 @@ class EmployeeController {
       }
 
       let analytics = {
-        totalAssigned: 0,
-        completed: 0,
+        totalReports: 0,
+        open: 0,
         inProgress: 0,
-        pending: 0,
+        closed: 0,
         byPriority: {
           high: 0,
           medium: 0,
@@ -358,22 +358,37 @@ class EmployeeController {
 
         if (reportsError) throw reportsError;
 
-        if (reports && reports.length > 0) {
-          analytics = {
-            totalAssigned: reports.length,
-            completed: reports.filter(r => r.status === 'resolved').length,
-            inProgress: reports.filter(r => r.status === 'in_progress').length,
-            pending: reports.filter(r => r.status === 'open').length,
-            byPriority: {
-              high: reports.filter(r => r.priority === 'high').length,
-              medium: reports.filter(r => r.priority === 'medium').length,
-              low: reports.filter(r => r.priority === 'low').length
-            },
-            province: user.assigned_province,
-            city: user.assigned_city,
-            role: userRole
-          };
+        const openCount = (reports || []).filter(r => r.status === 'open').length;
+        const inProgCount = (reports || []).filter(r => r.status === 'in_progress').length;
+        const resolvedCount = (reports || []).filter(r => r.status === 'resolved').length;
+
+        let closedCount = 0;
+        try {
+          const { data: closedRows } = await supabaseAdmin
+            .from('forum_history')
+            .select('id, address')
+            .ilike('address', `%${user.assigned_province}%`)
+            .is('deleted_at', null);
+          closedCount = (closedRows || []).length;
+        } catch (e) {
+          closedCount = 0;
         }
+
+        analytics = {
+          totalReports: (reports?.length || 0) + closedCount,
+          open: openCount,
+          inProgress: inProgCount,
+          resolved: resolvedCount,
+          closed: closedCount,
+          byPriority: {
+            high: (reports || []).filter(r => r.priority === 'high').length,
+            medium: (reports || []).filter(r => r.priority === 'medium').length,
+            low: (reports || []).filter(r => r.priority === 'low').length
+          },
+          province: user.assigned_province,
+          city: user.assigned_city,
+          role: userRole
+        };
       } catch (error) {
         console.log('Error fetching analytics data, using defaults:', error);
       }
@@ -396,7 +411,7 @@ class EmployeeController {
   static async getAssignedReports(req, res) {
     try {
       const employeeId = req.user.id;
-      const { reportStatus, priority, dateFilter, page = 1, limit = 10 } = req.query;
+      const { reportStatus, priority, dateFilter, page = 1, limit = 10, search } = req.query;
       
       const filters = {};
       if (reportStatus) filters.reportStatus = reportStatus;
@@ -404,10 +419,21 @@ class EmployeeController {
       if (dateFilter) filters.dateFilter = dateFilter;
       
       const reports = await User.getAssignedReports(employeeId, filters);
+      const flatReports = (reports || []).map(r => r.forums ? r.forums : r);
+      const filtered = search && search.trim()
+        ? flatReports.filter(r => {
+            const q = search.toLowerCase();
+            return (
+              (r.title || '').toLowerCase().includes(q) ||
+              (r.description || '').toLowerCase().includes(q) ||
+              (r.address || '').toLowerCase().includes(q)
+            );
+          })
+        : flatReports;
       
       const startIndex = (parseInt(page) - 1) * parseInt(limit);
       const endIndex = startIndex + parseInt(limit);
-      const paginatedReports = reports.slice(startIndex, endIndex);
+      const paginatedReports = filtered.slice(startIndex, endIndex);
       
       res.json({
         success: true,
@@ -415,8 +441,8 @@ class EmployeeController {
         pagination: {
           page: parseInt(page),
           limit: parseInt(limit),
-          total: reports.length,
-          totalPages: Math.ceil(reports.length / parseInt(limit))
+          total: filtered.length,
+          totalPages: Math.ceil(filtered.length / parseInt(limit))
         }
       });
 

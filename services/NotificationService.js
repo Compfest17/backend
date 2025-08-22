@@ -1,15 +1,11 @@
 require('dotenv').config();
-const { createClient } = require('@supabase/supabase-js');
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_ANON_KEY
-);
+const { supabaseAdmin } = require('../config/supabase');
 
 class NotificationService {
 
   static async createNotification(data) {
     try {
-      const { data: notification, error } = await supabase
+      const { data: notification, error } = await supabaseAdmin
         .from('notifications')
         .insert([{
           user_id: data.userId,
@@ -28,7 +24,7 @@ class NotificationService {
         return null;
       }
 
-      console.log(`📢 Notification created: ${data.type} for user ${data.userId}`);
+      
       return notification;
 
     } catch (error) {
@@ -40,28 +36,33 @@ class NotificationService {
 
   static async sendLikeNotification(forumId, likerUserId, likerUsername) {
     try {
-      const { data: forum, error } = await supabase
+      
+      
+      const { data: forum, error } = await supabaseAdmin
         .from('forums')
         .select('user_id, title')
         .eq('id', forumId)
         .single();
 
       if (error || !forum || forum.user_id === likerUserId) {
+        
         return;
       }
 
       const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
       
-      const { data: existingNotif } = await supabase
+      const { data: existingNotif } = await supabaseAdmin
         .from('notifications')
         .select('id, message')
         .eq('user_id', forum.user_id)
         .eq('forum_id', forumId)
-        .eq('type', 'like')
+        .eq('type', 'forum_comment')
+        .eq('title', likerUsername)
         .gte('created_at', oneHourAgo)
         .single();
 
       if (existingNotif) {
+        
         const currentMessage = existingNotif.message;
         let newMessage;
         
@@ -77,7 +78,7 @@ class NotificationService {
           newMessage = `${likerUsername} dan 1 lainnya menyukai laporan Anda`;
         }
 
-        await supabase
+        await supabaseAdmin
           .from('notifications')
           .update({
             title: `${likerUsername} dan lainnya`,
@@ -88,12 +89,13 @@ class NotificationService {
           .eq('id', existingNotif.id);
 
       } else {
+        
         await this.createNotification({
           userId: forum.user_id,
           forumId: forumId,
           title: likerUsername,
           message: `${likerUsername} menyukai laporan Anda`,
-          type: 'like'
+          type: 'forum_comment'
         });
       }
 
@@ -102,25 +104,60 @@ class NotificationService {
     }
   }
 
-  static async sendCommentNotification(forumId, commenterUserId, commenterUsername, commentContent) {
+  static async sendCommentNotification(forumId, commenterUserId, commenterUsername, commentContent, notificationType = 'comment') {
     try {
-      const { data: forum, error } = await supabase
-        .from('forums')
-        .select('user_id, title')
-        .eq('id', forumId)
-        .single();
+      
+      
+      if (notificationType === 'reply') {
+        const { data: actor } = await supabaseAdmin
+          .from('users')
+          .select('username, full_name')
+          .eq('id', commenterUserId)
+          .single();
+        const actorTitle = actor?.username ? `@${actor.username}` : (actor?.full_name || commenterUsername);
+        const notificationData = {
+          userId: commenterUserId, 
+          forumId: forumId,
+          title: actorTitle,
+          message: `${commenterUsername} membalas komentar Anda: "${commentContent.substring(0, 50)}..."`,
+          type: 'forum_comment'
+        };
 
-      if (error || !forum || forum.user_id === commenterUserId) {
-        return;
+        
+        const result = await this.createNotification(notificationData);
+        return result;
+      } else {
+        const { data: forum, error } = await supabaseAdmin
+          .from('forums')
+          .select('user_id, title')
+          .eq('id', forumId)
+          .single();
+
+        
+
+        if (error || !forum || forum.user_id === commenterUserId) {
+          
+          return;
+        }
+
+        const { data: commenterRow } = await supabaseAdmin
+          .from('users')
+          .select('username, full_name')
+          .eq('id', commenterUserId)
+          .single();
+        const actorTitle = commenterRow?.username ? `@${commenterRow.username}` : (commenterRow?.full_name || commenterUsername);
+        const notificationData = {
+          userId: forum.user_id,
+          forumId: forumId,
+          title: actorTitle,
+          message: `${commenterUsername} mengomentari postingan Anda: "${commentContent.substring(0, 50)}..."`,
+          type: 'forum_comment'
+        };
+
+        
+        const result = await this.createNotification(notificationData);
+        return result;
       }
-
-      await this.createNotification({
-        userId: forum.user_id,
-        forumId: forumId,
-        title: commenterUsername,
-        message: `${commenterUsername} mengomentari laporan Anda`,
-        type: 'comment_reply'
-      });
 
     } catch (error) {
       console.error('Error sending comment notification:', error);
@@ -129,22 +166,53 @@ class NotificationService {
 
   static async sendMentionNotification(forumId, mentionerUserId, mentionerUsername, commentContent, mentionedUsernames) {
     try {
-      for (const username of mentionedUsernames) {
-        const { data: user } = await supabase
+      
+      
+      const { data: mentioner } = await supabaseAdmin
+        .from('users')
+        .select('username, full_name')
+        .eq('id', mentionerUserId)
+        .single();
+      const mentionerTitle = mentioner?.username ? `@${mentioner.username}` : (mentioner?.full_name || `@${mentionerUsername}`);
+
+      for (const mention of mentionedUsernames) {
+        
+        
+        let { data: user } = await supabaseAdmin
           .from('users')
-          .select('id')
-          .eq('username', username)
+          .select('id, username, full_name')
+          .eq('username', mention)
           .single();
 
-        if (!user || user.id === mentionerUserId) continue;
+        if (!user) {
+          
+          const { data: userByName } = await supabaseAdmin
+            .from('users')
+            .select('id, username, full_name')
+            .ilike('full_name', `%${mention}%`)
+            .single();
+          
+          if (userByName) {
+            user = userByName;
+            
+          }
+        }
 
-        await this.createNotification({
+        if (!user || user.id === mentionerUserId) {
+          
+          continue;
+        }
+
+        const notificationData = {
           userId: user.id,
           forumId: forumId,
-          title: `@${mentionerUsername}`,
+          title: mentionerTitle,
           message: `@${mentionerUsername} menyebut Anda dalam komentar: "${commentContent.substring(0, 50)}..."`,
-          type: 'mention'
-        });
+          type: 'forum_comment'
+        };
+
+        
+        const result = await this.createNotification(notificationData);
       }
 
     } catch (error) {
@@ -154,13 +222,20 @@ class NotificationService {
 
   static async sendStatusUpdateNotification(forumId, newStatus, adminUsername = 'Admin') {
     try {
-      const { data: forum, error } = await supabase
+      
+      
+      const { data: forum, error } = await supabaseAdmin
         .from('forums')
         .select('user_id, title')
         .eq('id', forumId)
         .single();
 
-      if (error || !forum) return;
+      
+      
+      if (error || !forum) {
+        
+        return;
+      }
 
       let message = '';
       let title = '';
@@ -168,35 +243,39 @@ class NotificationService {
       switch (newStatus) {
         case 'in_progress':
           title = 'Sistem GatotKota';
-          message = 'Laporan Anda telah diverifikasi oleh admin dan sedang dalam proses penanganan.';
+          message = 'Laporan Anda sedang dalam proses penanganan oleh petugas.';
+          break;
+        case 'resolved':
+          title = 'Sistem GatotKota';
+          message = 'Laporan Anda telah berhasil diselesaikan oleh petugas.';
           break;
         case 'closed':
-          title = 'Dinas Pekerjaan Umum';
-          message = 'Laporan Anda berhasil menjadi "Selesai".';
+          title = 'Sistem GatotKota';
+          message = 'Laporan Anda telah ditutup oleh petugas dan tidak akan ditindaklanjuti lebih lanjut.';
           break;
         case 'rejected':
           title = 'Sistem GatotKota';
           message = 'Laporan Anda telah ditinjau dan tidak memenuhi kriteria untuk ditindaklanjuti.';
           break;
         default:
-          title = adminUsername;
-          message = `Status laporan Anda telah diperbarui menjadi "${newStatus}".`;
+          title = 'Sistem GatotKota';
+          message = `Status laporan Anda telah diperbarui menjadi "${newStatus}" oleh petugas.`;
       }
-
-      await this.createNotification({
+      
+      const notificationResult = await this.createNotification({
         userId: forum.user_id,
         forumId: forumId,
         title: title,
         message: message,
         type: 'status_change'
       });
+      
 
     } catch (error) {
       console.error('Error sending status update notification:', error);
     }
   }
-
-
+  
   static async sendSystemNotification(userId, title, message, forumId = null) {
     try {
       await this.createNotification({
@@ -212,17 +291,46 @@ class NotificationService {
     }
   }
 
+  static async sendLevelUpNotification(userId, newLevelName, newLevelPoints) {
+    try {
+      
+      
+      const notificationData = {
+        userId: userId,
+        forumId: null,
+        title: '🎉 Level Up!',
+        message: `Selamat! Anda telah naik ke level "${newLevelName}" dengan ${newLevelPoints} poin!`,
+        type: 'level_up'
+      };
+
+      
+      const result = await this.createNotification(notificationData);
+      
+      return result;
+
+    } catch (error) {
+      console.error('Error sending level up notification:', error);
+      return null;
+    }
+  }
+
 
   static parseMentions(content) {
-    const mentionRegex = /@(\w+)/g;
+    const mentionRegex = /@([a-zA-Z0-9_\u00C0-\u017F]+)(?:\s|$)/g;
     const mentions = [];
     let match;
     
+    
     while ((match = mentionRegex.exec(content)) !== null) {
-      mentions.push(match[1]);
+      const mention = match[1].trim();
+      if (mention.length > 0) {
+        mentions.push(mention);
+      }
     }
     
-    return [...new Set(mentions)];
+    const uniqueMentions = [...new Set(mentions)];
+    
+    return uniqueMentions;
   }
 
 
@@ -230,7 +338,7 @@ class NotificationService {
     try {
       const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
       
-      const { error } = await supabase
+      const { error } = await supabaseAdmin
         .from('notifications')
         .delete()
         .lt('created_at', thirtyDaysAgo);
@@ -238,7 +346,7 @@ class NotificationService {
       if (error) {
         console.error('Error cleaning up old notifications:', error);
       } else {
-        console.log('📢 Old notifications cleaned up successfully');
+        
       }
 
     } catch (error) {

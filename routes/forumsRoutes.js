@@ -5,6 +5,7 @@ const { authenticateToken, requireRole } = require('../middleware/auth');
 const router = express.Router();
 
 router.get('/trending', ForumsController.getTrending); 
+router.get('/home/summary', ForumsController.getHomeSummary);
 router.get('/bookmarks', authenticateToken, ForumsController.getUserBookmarks);
 router.get('/all', 
   authenticateToken, 
@@ -23,7 +24,10 @@ router.get('/:forumId/comments', ForumsController.getComments);
 router.post('/comments/:commentId/vote', authenticateToken, ForumsController.voteComment);
 
 router.post('/', authenticateToken, ForumsController.createForum);
+router.get('/:forumId/mention-suggestions', authenticateToken, ForumsController.getMentionSuggestions);
 router.post('/:forumId/comments', authenticateToken, ForumsController.createComment);
+router.put('/comments/:commentId', authenticateToken, ForumsController.updateComment);
+router.delete('/comments/:commentId', authenticateToken, ForumsController.deleteComment);
 router.post('/:id/vote', authenticateToken, ForumsController.votePost);
 router.post('/:id/bookmark', authenticateToken, ForumsController.toggleBookmark);
 router.get('/:id/bookmark/status', authenticateToken, ForumsController.checkBookmarkStatus);
