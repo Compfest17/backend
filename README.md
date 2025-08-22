@@ -17,6 +17,12 @@ In addition, GatotKota also provides a **community discussion forum** where user
 
 ---
 
+## Development
+
+[gatotkota.vercel.app](https://gatotkota.vercel.app/)
+
+---
+
 ## ℹ️ About
 
 **GatotKota** is a web-based platform designed to help communities **report damaged urban infrastructure**—such as roads, street lights, bridges, and public facilities—directly to the authorities.  
