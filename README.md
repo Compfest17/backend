@@ -46,6 +46,9 @@ This frontend project is built using **Next.js** and modern web technologies to 
 ### 📌 Use Case Diagram
 ![WhatsApp Image 2025-08-22 at 19 17 58_04619e60](https://github.com/user-attachments/assets/ee306962-f54e-49e5-a7c6-309f4e2345d6)
 
+### 🔗 System Design Diagram
+<img width="1920" height="1080" alt="Team 3 (1)" src="https://github.com/user-attachments/assets/7384ca21-fad1-4c31-972d-7a4ccbd23f1e" />
+
 ---
 
 ## ✨ Features
